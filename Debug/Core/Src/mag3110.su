@@ -1,0 +1,5 @@
+../Core/Src/mag3110.c:13:26:readReg	40	static
+../Core/Src/mag3110.c:19:26:writeReg	32	static
+../Core/Src/mag3110.c:27:19:MAG3110_Init	24	static
+../Core/Src/mag3110.c:55:19:MAG3110_ReadRaw	48	static
+../Core/Src/mag3110.c:84:19:MAG3110_Read_uT	32	static
