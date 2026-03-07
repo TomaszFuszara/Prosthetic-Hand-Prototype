@@ -32,7 +32,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define MOTION_THRESHOLD 2.0f   // µT
+#define STILL_LIMIT 30          // ile próbek bez ruchu kończy kalibrację
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -47,6 +48,28 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 MAG3110_t mag;
+
+float x,y,z;
+
+float xmin =  10000;
+float xmax = -10000;
+
+float ymin =  10000;
+float ymax = -10000;
+
+float zmin =  10000;
+float zmax = -10000;
+
+float x_offset = 0;
+float y_offset = 0;
+float z_offset = 0;
+
+float x_prev = 0;
+float y_prev = 0;
+float z_prev = 0;
+
+uint8_t calibration_done = 0;
+uint32_t still_counter = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -105,7 +128,12 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   int i = 0;
-  float x,y,z;
+//  float x,y,z;
+//
+//  //Dla offsetu
+//  float x_prev,y_prev,z_prev;
+//  float xmin, xmax, ymin, ymax, zmin, zmax;
+//  float x_offset, y_offset, z_offset;
 
 
   for(uint8_t addr=1; addr<128; addr++)
@@ -124,8 +152,62 @@ int main(void)
 
 
 	  MAG3110_Read_uT(&mag, &x,&y,&z);
-	  printf("%d. x = %.2f, y = %.2f, z = %.2f\r\n", i,x,y,z);
-	  i++;
+//Dla offsetu
+	  float dx = fabsf(x - x_prev);
+	  float dy = fabsf(y - y_prev);
+	  float dz = fabsf(z - z_prev);
+
+	  uint8_t motion_detected = (dx > MOTION_THRESHOLD) ||
+	                            (dy > MOTION_THRESHOLD) ||
+	                            (dz > MOTION_THRESHOLD);
+//	  printf("%d. x = %.2f, y = %.2f, z = %.2f\r\n", i,x,y,z);
+//	  i++;
+	  if(!calibration_done)
+	  {
+	      /* aktualizacja min/max */
+	      if(x < xmin) xmin = x;
+	      if(x > xmax) xmax = x;
+
+	      if(y < ymin) ymin = y;
+	      if(y > ymax) ymax = y;
+
+	      if(z < zmin) zmin = z;
+	      if(z > zmax) zmax = z;
+
+	      /* wykrywanie braku ruchu */
+	      if(motion_detected)
+	          still_counter = 0;
+	      else
+	          still_counter++;
+
+	      /* zakończenie kalibracji */
+	      if(still_counter > STILL_LIMIT)
+	      {
+	          x_offset = (xmax + xmin)/2.0f;
+	          y_offset = (ymax + ymin)/2.0f;
+	          z_offset = (zmax + zmin)/2.0f;
+
+	          calibration_done = 1;
+
+	          printf("Calibration DONE\r\n");
+	          printf("Offsets: %.2f %.2f %.2f\r\n",
+	                 x_offset,y_offset,z_offset);
+	      }
+	  }else
+	  {
+	      float x_corr = x - x_offset;
+	      float y_corr = y - y_offset;
+	      float z_corr = z - z_offset;
+
+	      printf("corr: %.2f %.2f %.2f\r\n", x_corr,y_corr,z_corr);
+
+	      /* wykrywanie ruchu magnesu */
+	      if(motion_detected)
+	          printf("MAGNET MOVEMENT DETECTED\r\n");
+	  }
+	  x_prev = x;
+	  y_prev = y;
+	  z_prev = z;
 	  HAL_Delay(1000);
     /* USER CODE END WHILE */
 
