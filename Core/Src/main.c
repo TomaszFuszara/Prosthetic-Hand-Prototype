@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <math.h>
 #include "mag3110.h"
 /* USER CODE END Includes */
 
@@ -32,7 +33,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MOTION_THRESHOLD 2.0f   // µT
+#define MOTION_THRESHOLD 4.0//2.0f   // µT, 2.0 było za mało
 #define STILL_LIMIT 30          // ile próbek bez ruchu kończy kalibrację
 /* USER CODE END PD */
 
@@ -43,6 +44,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c2;
 
 UART_HandleTypeDef huart2;
 
@@ -77,6 +79,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_I2C2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -121,25 +124,19 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_USART2_UART_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   MAG3110_Init(&mag, &hi2c1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int i = 0;
-//  float x,y,z;
-//
-//  //Dla offsetu
-//  float x_prev,y_prev,z_prev;
-//  float xmin, xmax, ymin, ymax, zmin, zmax;
-//  float x_offset, y_offset, z_offset;
 
 
   for(uint8_t addr=1; addr<128; addr++)
   {
       if(HAL_I2C_IsDeviceReady(&hi2c1, addr<<1, 2, 10) == HAL_OK)
-          printf("FOUND: 0x%02X\r\n", addr);
+          printf("Sensor found. Address: 0x%02X\r\n", addr);
   }
 
   if(MAG3110_Init(&mag, &hi2c1) != HAL_OK)
@@ -150,7 +147,6 @@ int main(void)
   while (1)
   {
 
-
 	  MAG3110_Read_uT(&mag, &x,&y,&z);
 //Dla offsetu
 	  float dx = fabsf(x - x_prev);
@@ -160,10 +156,11 @@ int main(void)
 	  uint8_t motion_detected = (dx > MOTION_THRESHOLD) ||
 	                            (dy > MOTION_THRESHOLD) ||
 	                            (dz > MOTION_THRESHOLD);
-//	  printf("%d. x = %.2f, y = %.2f, z = %.2f\r\n", i,x,y,z);
-//	  i++;
+
 	  if(!calibration_done)
 	  {
+		  printf("Calibration in progress\r\n");
+		  HAL_GPIO_WritePin(LR_GPIO_Port, LR_Pin, GPIO_PIN_SET);
 	      /* aktualizacja min/max */
 	      if(x < xmin) xmin = x;
 	      if(x > xmax) xmax = x;
@@ -188,10 +185,10 @@ int main(void)
 	          z_offset = (zmax + zmin)/2.0f;
 
 	          calibration_done = 1;
-
+	          HAL_GPIO_WritePin(LR_GPIO_Port, LR_Pin, GPIO_PIN_RESET);
 	          printf("Calibration DONE\r\n");
-	          printf("Offsets: %.2f %.2f %.2f\r\n",
-	                 x_offset,y_offset,z_offset);
+	          printf("Offsets: x_offset=%.2f y_offset=%.2f z_offset=%.2f\r\n", x_offset,y_offset,z_offset);
+	          HAL_GPIO_WritePin(LG_GPIO_Port, LG_Pin, GPIO_PIN_SET);
 	      }
 	  }else
 	  {
@@ -199,16 +196,20 @@ int main(void)
 	      float y_corr = y - y_offset;
 	      float z_corr = z - z_offset;
 
-	      printf("corr: %.2f %.2f %.2f\r\n", x_corr,y_corr,z_corr);
+	      printf("Corrected values: x=%.2f y=%.2f z=%.2f\r\n", x_corr,y_corr,z_corr);
 
 	      /* wykrywanie ruchu magnesu */
-	      if(motion_detected)
+	      if(motion_detected){
+	    	  HAL_GPIO_WritePin(LY_GPIO_Port, LY_Pin, GPIO_PIN_SET);
 	          printf("MAGNET MOVEMENT DETECTED\r\n");
+	      }else{
+	    	  HAL_GPIO_WritePin(LY_GPIO_Port, LY_Pin, GPIO_PIN_RESET);
+	      }
 	  }
 	  x_prev = x;
 	  y_prev = y;
 	  z_prev = z;
-	  HAL_Delay(1000);
+	  HAL_Delay(100);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -287,6 +288,40 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief I2C2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C2_Init(void)
+{
+
+  /* USER CODE BEGIN I2C2_Init 0 */
+
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.ClockSpeed = 100000;
+  hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+
+  /* USER CODE END I2C2_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -326,13 +361,35 @@ static void MX_USART2_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LY_GPIO_Port, LY_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, LG_Pin|LR_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : LY_Pin */
+  GPIO_InitStruct.Pin = LY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LY_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LG_Pin LR_Pin */
+  GPIO_InitStruct.Pin = LG_Pin|LR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
