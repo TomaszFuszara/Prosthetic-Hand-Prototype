@@ -33,7 +33,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MOTION_THRESHOLD 4.0//2.0f   // µT, 2.0 było za mało
+#define MOTION_THRESHOLD 5.0//2.0f   // µT, 2.0 było za mało
+#define DIRECTION_THRESHOLD 5.0f
 #define STILL_LIMIT 30          // ile próbek bez ruchu kończy kalibrację
 /* USER CODE END PD */
 
@@ -50,6 +51,8 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 MAG3110_t mag;
+
+#define N 5
 
 float x,y,z;
 
@@ -69,6 +72,13 @@ float z_offset = 0;
 float x_prev = 0;
 float y_prev = 0;
 float z_prev = 0;
+
+float x_prev_corr = 0;
+float y_prev_corr = 0;
+float z_prev_corr = 0;
+
+float B_buf[N];
+int idx=0;
 
 uint8_t calibration_done = 0;
 uint32_t still_counter = 0;
@@ -136,7 +146,8 @@ int main(void)
   for(uint8_t addr=1; addr<128; addr++)
   {
       if(HAL_I2C_IsDeviceReady(&hi2c1, addr<<1, 2, 10) == HAL_OK)
-          printf("Sensor found. Address: 0x%02X\r\n", addr);
+    	  printf("Sensor found. Address: 0x%02X\r\n", addr);
+
   }
 
   if(MAG3110_Init(&mag, &hi2c1) != HAL_OK)
@@ -156,7 +167,6 @@ int main(void)
 	  uint8_t motion_detected = (dx > MOTION_THRESHOLD) ||
 	                            (dy > MOTION_THRESHOLD) ||
 	                            (dz > MOTION_THRESHOLD);
-
 	  if(!calibration_done)
 	  {
 		  printf("Calibration in progress\r\n");
@@ -191,25 +201,78 @@ int main(void)
 	          HAL_GPIO_WritePin(LG_GPIO_Port, LG_Pin, GPIO_PIN_SET);
 	      }
 	  }else
-	  {
-	      float x_corr = x - x_offset;
-	      float y_corr = y - y_offset;
-	      float z_corr = z - z_offset;
+	     {
+	         float x_corr = x - x_offset;
+	         float y_corr = y - y_offset;
+	         float z_corr = z - z_offset;
 
-	      printf("Corrected values: x=%.2f y=%.2f z=%.2f\r\n", x_corr,y_corr,z_corr);
+	         printf("Corrected values: x=%.2f y=%.2f z=%.2f\r\n",
+	                 x_corr,y_corr,z_corr);
 
-	      /* wykrywanie ruchu magnesu */
-	      if(motion_detected){
-	    	  HAL_GPIO_WritePin(LY_GPIO_Port, LY_Pin, GPIO_PIN_SET);
-	          printf("MAGNET MOVEMENT DETECTED\r\n");
-	      }else{
-	    	  HAL_GPIO_WritePin(LY_GPIO_Port, LY_Pin, GPIO_PIN_RESET);
-	      }
-	  }
-	  x_prev = x;
-	  y_prev = y;
-	  z_prev = z;
-	  HAL_Delay(100);
+	         /* zmiana pola magnetycznego */
+	         float dx_corr = x_corr - x_prev_corr;
+	         float dy_corr = y_corr - y_prev_corr;
+	         float dz_corr = z_corr - z_prev_corr;
+
+	         float adx = fabsf(dx_corr);
+	         float ady = fabsf(dy_corr);
+	         float adz = fabsf(dz_corr);
+
+	         /* wykrywanie ruchu */
+	         if(adx > DIRECTION_THRESHOLD ||
+	            ady > DIRECTION_THRESHOLD ||
+	            adz > DIRECTION_THRESHOLD)
+	         {
+//	             HAL_GPIO_WritePin(LY1_GPIO_Port, LY1_Pin, GPIO_PIN_SET);
+	             printf("MAGNET MOVEMENT DETECTED\r\n");
+
+	             /* kierunek ruchu */
+
+	             if(adx > ady && adx > adz)
+	             {
+	                 if(dx_corr > 0){
+	                	 printf("Direction: +X\r\n");
+	                	 HAL_GPIO_WritePin(LY1_GPIO_Port, LY1_Pin, GPIO_PIN_SET);
+	                 }else{
+	                	 printf("Direction: -X\r\n");
+	                	 HAL_GPIO_WritePin(LY2_GPIO_Port, LY2_Pin, GPIO_PIN_SET);
+	                 }
+
+	             }else if(ady > adx && ady > adz)
+	             {
+	                 if(dy_corr > 0){
+	                	 printf("Direction: +Y\r\n");
+	                	 HAL_GPIO_WritePin(LY1_GPIO_Port, LY1_Pin, GPIO_PIN_SET);
+	                 }else{
+	                	 printf("Direction: -Y\r\n");
+	                	 HAL_GPIO_WritePin(LY2_GPIO_Port, LY2_Pin, GPIO_PIN_SET);
+	                 }
+
+	             }else{
+	                 if(dz_corr > 0){
+	                	 printf("Direction: +Z\r\n");
+	                	 HAL_GPIO_WritePin(LY1_GPIO_Port, LY1_Pin, GPIO_PIN_SET);
+	                 }else{
+	                	 printf("Direction: -Z\r\n");
+	                	 HAL_GPIO_WritePin(LY2_GPIO_Port, LY2_Pin, GPIO_PIN_SET);
+	                 }
+	             }
+	         }
+	         else{
+	             HAL_GPIO_WritePin(LY1_GPIO_Port, LY1_Pin, GPIO_PIN_RESET);
+	             HAL_GPIO_WritePin(LY2_GPIO_Port, LY2_Pin, GPIO_PIN_RESET);
+	         }
+
+	         x_prev_corr = x_corr;
+	         y_prev_corr = y_corr;
+	         z_prev_corr = z_corr;
+	     }
+
+	     x_prev = x;
+	     y_prev = y;
+	     z_prev = z;
+
+	     HAL_Delay(100);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -372,17 +435,17 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LY_GPIO_Port, LY_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, LY2_Pin|LY1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, LG_Pin|LR_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : LY_Pin */
-  GPIO_InitStruct.Pin = LY_Pin;
+  /*Configure GPIO pins : LY2_Pin LY1_Pin */
+  GPIO_InitStruct.Pin = LY2_Pin|LY1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LY_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LG_Pin LR_Pin */
   GPIO_InitStruct.Pin = LG_Pin|LR_Pin;
