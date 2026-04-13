@@ -65,6 +65,26 @@ void Error_Handler(void);
 #define LG_GPIO_Port GPIOA
 #define LR_Pin GPIO_PIN_1
 #define LR_GPIO_Port GPIOA
+#define Palec1Roskorcz_Pin GPIO_PIN_6
+#define Palec1Roskorcz_GPIO_Port GPIOA
+#define Palec1Skorcz_Pin GPIO_PIN_7
+#define Palec1Skorcz_GPIO_Port GPIOA
+#define Palec2Skorcz_Pin GPIO_PIN_15
+#define Palec2Skorcz_GPIO_Port GPIOB
+#define Palec2Roskorcz_Pin GPIO_PIN_8
+#define Palec2Roskorcz_GPIO_Port GPIOA
+#define Palec3Skorcz_Pin GPIO_PIN_9
+#define Palec3Skorcz_GPIO_Port GPIOA
+#define Palec3Roskorcz_Pin GPIO_PIN_10
+#define Palec3Roskorcz_GPIO_Port GPIOA
+#define Palec4Skorcz_Pin GPIO_PIN_11
+#define Palec4Skorcz_GPIO_Port GPIOA
+#define Palec4Roskorcz_Pin GPIO_PIN_15
+#define Palec4Roskorcz_GPIO_Port GPIOA
+#define Palec5Skorcz_Pin GPIO_PIN_3
+#define Palec5Skorcz_GPIO_Port GPIOB
+#define Palec5Roskorcz_Pin GPIO_PIN_4
+#define Palec5Roskorcz_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
