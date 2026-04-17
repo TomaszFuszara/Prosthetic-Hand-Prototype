@@ -94,6 +94,8 @@ float x_prev_filt = 0, y_prev_filt = 0, z_prev_filt = 0;
 
 static int motion_counter = 0;
 uint32_t timer_start = 0;
+
+uint8_t movement_active = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -228,14 +230,10 @@ int main(void)
 
 //				 printf("Corrected values: x=%.2f y=%.2f z=%.2f\r\n", x_corr,y_corr,z_corr);
 
-			  // FILTR IIR
-			  x_filt = ALPHA * x_corr + (1 - ALPHA) * x_prev_filt;
-			  y_filt = ALPHA * y_corr + (1 - ALPHA) * y_prev_filt;
-			  z_filt = ALPHA * z_corr + (1 - ALPHA) * z_prev_filt;
-
-
-			     uint32_t current_time = HAL_GetTick() - timer_start;
-			     printf("Field values: x=%.2f, y=%.2f, z=%.2f, time=%lu ms, movement counter: %d\r\n", x_filt,y_filt,z_filt,current_time,MovementCounter);
+				  // FILTR IIR
+				  x_filt = ALPHA * x_corr + (1 - ALPHA) * x_prev_filt;
+				  y_filt = ALPHA * y_corr + (1 - ALPHA) * y_prev_filt;
+				  z_filt = ALPHA * z_corr + (1 - ALPHA) * z_prev_filt;
 
 				 /* zmiana pola magnetycznego */
 				 // FILTR IIR
@@ -244,6 +242,9 @@ int main(void)
 				 float dz = z_filt - z_prev_filt;
 
 				 float dB = sqrtf(dx*dx + dy*dy + dz*dz);
+
+				 uint32_t current_time = HAL_GetTick() - timer_start;
+				 printf("Field values: x=%.2f, y=%.2f, z=%.2f, time=%lu ms, dB=%.2f, movement counter: %d\r\n", x_filt,y_filt,z_filt,current_time,dB,MovementCounter);
 
 				 /* wykrywanie ruchu */
 				 if(dB > THRESHOLD){
@@ -254,13 +255,10 @@ int main(void)
 
 				 if(motion_counter >= 3)
 				 {
-					 //printf("dB: %.2f\r\n", dB);
-					 printf("Field values: x=%.2f, y=%.2f, z=%.2f, time=%lu ms, movement counter: %d, movement detected!\r\n", x_filt,y_filt,z_filt,current_time,MovementCounter);
 
 					 float adx = fabsf(dx);
 					 float ady = fabsf(dy);
 					 float adz = fabsf(dz);
-					 //______________________________________________________________________________
 
 					 /* kierunek ruchu */
 
